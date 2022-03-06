@@ -29,7 +29,19 @@ def one_hot_encode_seqs(seq_arr: List[str]) -> ArrayLike:
                 G -> [0, 0, 0, 1]
             Then, AGA -> [1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0]
     """
-    pass
+    one_hot_seqs = [] # Initialize empty list for placing the encodings
+    for i in seq_arr: # Iterate over the sequence and manually encode the values for each nucleotide
+        if i == "A":
+            one_hot_seqs.append([1, 0, 0, 0])
+        if i == "T":
+            one_hot_seqs.append([0, 1, 0, 0])
+        if i == "C":
+            one_hot_seqs.append([0, 0, 1, 0])
+        if i == "G":
+            one_hot_seqs.append([0, 0, 0, 1])
+    
+    one_hot_seqs = np.array([item for sublist in one_hot_seqs for item in sublist]) # This flattens the array into a single list
+    return one_hot_seqs # Get the final result
 
 
 def sample_seqs(
