@@ -328,7 +328,7 @@ class NeuralNetwork:
             
             if val_loss_diff < self._convergence_thresh: # If the difference between the losses of the last two epochs is below the established threshold, break the loop and stop training. The model has achieved C O N V E R G E N C E.
                 break
-            
+        return per_epoch_loss_train, per_epoch_accuracy_train, per_epoch_loss_val, per_epoch_accuracy_val 
 
     def predict(self, X: ArrayLike) -> ArrayLike:
         """
