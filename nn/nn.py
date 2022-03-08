@@ -439,7 +439,6 @@ class NeuralNetwork:
         """
         m = y.shape[1]
         return (1/m) * (-(y/y_hat) + ((1-y) * np.log(1- y_hat)))
-        #return -(np.divide(y, y_hat) - np.divide(1-y, 1-y_hat)) # Use numpy's divide to perform element-wise true divisions
 
     def _mean_squared_error(self, y: ArrayLike, y_hat: ArrayLike) -> float:
         """
