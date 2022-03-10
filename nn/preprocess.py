@@ -30,20 +30,12 @@ def one_hot_encode_seqs(seq_arr: List[str]) -> ArrayLike:
                 G -> [0, 0, 0, 1]
             Then, AGA -> [1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0]
     """
-    one_hot_seqs = [] # Initialize empty list for placing the encodings
-    for i in seq_arr: # Iterate over the sequence and manually encode the values for each nucleotide
-        if i == "A":
-            one_hot_seqs.append([1, 0, 0, 0])
-        if i == "T":
-            one_hot_seqs.append([0, 1, 0, 0])
-        if i == "C":
-            one_hot_seqs.append([0, 0, 1, 0])
-        if i == "G":
-            one_hot_seqs.append([0, 0, 0, 1])
-    
-    one_hot_seqs = np.array([item for sublist in one_hot_seqs for item in sublist]) # This flattens the array into a single list
-    return one_hot_seqs # Get the final result
-
+    encode_dict = {'A':[1, 0, 0, 0], 'T':[0, 1, 0, 0], 'C':[0, 0, 1, 0], 'G':[0, 0, 0, 1]}
+    encodings = []
+    for seq in seq_arr:
+        encoding = np.array([encode_dict[nuc] for nuc in seq])
+        encodings.append(encoding.flatten())
+    return np.array(encodings)
 
 def sample_seqs(
         seqs: List[str],
@@ -70,10 +62,12 @@ def sample_seqs(
 
     # Create instance of a counter and get the label counts + the predominant label
     label_counter = Counter(labels)
-    max_label = np.max(label_counter.values())
+    max_label = np.max(list(label_counter.values()))
+    labels = np.array(labels) # Convert the labels and sequences to numpy arrays so that we can perform operations on them with the objects we'll create
+    seqs = np.array(seqs)
 
     sampled_idxs = []
-    sampled_idxs = np.array(sampled_idxs) # Initialize empty numpy array where we'll place the new indices (i.e. accounting for class imbalance)
+    sampled_idxs = np.array(sampled_idxs, dtype = 'int') # Initialize empty numpy array where we'll place the new indices (i.e. accounting for class imbalance)
 
     # Iterate over the labels and their respective counts
     for label, count in label_counter.items():
@@ -86,7 +80,7 @@ def sample_seqs(
     sampled_seqs = seqs[sampled_idxs] 
     sampled_labels = labels[sampled_idxs]
 
-    return sampled_seqs, sampled_labels 
+    return sampled_seqs.tolist(), sampled_labels.tolist() 
 
 
 

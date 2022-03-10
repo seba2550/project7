@@ -5,6 +5,8 @@
 import enum
 from functools import cache
 from logging import PlaceHolder
+
+from pkg_resources import yield_lines
 import numpy as np
 from typing import List, Dict, Tuple
 from numpy.typing import ArrayLike
@@ -110,8 +112,9 @@ class NeuralNetwork:
             Z_curr: ArrayLike
                 Current layer linear transformed matrix.
         """
-        Z_curr = np.transpose(np.matmul(W_curr, np.transpose(A_prev))) # Had to transpose both matrices to get this mult to work
-        Z_curr += b_curr.flatten()
+        Z_curr = A_prev.dot(W_curr.T) + b_curr.T
+        #Z_curr = np.transpose(np.matmul(W_curr, np.transpose(A_prev))) # Had to transpose A_prev and the product of the mat mult to get this to work
+        #Z_curr += b_curr.flatten()
         # Apply the specified activation function to our current layer linear transformed matrix. That is now our current layer activation matrix
         # BUT FIRST, some input verification
         activation = activation.lower() # Let's convert the input to lowercase to make everyone's lives easier
@@ -139,22 +142,36 @@ class NeuralNetwork:
             cache: Dict[str, ArrayLike]:
                 Dictionary storing Z and A matrices from `_single_forward` for use in backprop.
         """
+        print('Forwaaaaaaaard')
         cache = {} # Initialize an empty dictionary for our matrices cache
-        A_curr = X # At the start, the input matrix is our A matrix
-        for idx, layer in enumerate(self.arch): # Iterate over the network using the same approach from the _init_params method
-            A_prev = A_curr # Update!
-            next_idx = idx + 1 # Keep separate index to go through the network
-            string_idx = str(idx) # Cast the main index to a string for accessing the weights and biases from the params dictionary later on
-            string_next_idx = str(next_idx) # Same thing as previous line for the separate index thing
-            activation_func_curr = layer['activation'] # Get the activation function for our current layer from the 'arch' dictionary
-            W_curr = self._param_dict['W' + string_next_idx] # Get the weights for our current layer from the params dictionary
-            b_curr = self._param_dict['b' + string_next_idx] # Get the biases for our current layer from the params dictionary
+        A_prev = X # At the start, the input matrix is our A matrix
+        cache['A0'] = A_prev
+        # for idx, layer in enumerate(self.arch): # Iterate over the network using the same approach from the _init_params method
+        #     next_idx = idx + 1 # Index to go through the network
+        #     string_next_idx = str(next_idx) # Cast the index to string for accesing the params dict
+        #     activation_func_curr = layer['activation'] # Get the activation function for our current layer from the 'arch' dictionary
+        #     W_curr = self._param_dict['W' + string_next_idx] # Get the weights for our current layer from the params dictionary
+        #     b_curr = self._param_dict['b' + string_next_idx] # Get the biases for our current layer from the params dictionary
 
-            A_curr, Z_curr = self._single_forward(W_curr, b_curr, A_prev, activation_func_curr) # Use the _single_forward function to get current layer activation matrix and current layer linear transformed matrix
+        #     A_curr, Z_curr = self._single_forward(W_curr, b_curr, A_prev, activation_func_curr) # Use the _single_forward function to get current layer activation matrix and current layer linear transformed matrix
 
-            cache["A" + string_idx] = A_prev # Store the previous A matrix in our cache
-            cache["Z" + string_next_idx] = Z_curr # As well as our current Z matrix
+        #     cache["A" + string_next_idx] = A_curr # Store the A matrix in our cache
+        #     cache["Z" + string_next_idx] = Z_curr # As well as our current Z matrix
             
+        #     A_prev = A_curr # Update!
+        for layer in range(1, len(self.arch) + 1):
+            print('Forward function, going through layer ' + str(layer))
+            W_curr = self._param_dict['W' + str(layer)]
+            b_curr = self._param_dict['b' + str(layer)]
+            activation_func = self.arch[layer - 1]['activation']
+            A_curr, Z_curr = self._single_forward(W_curr, b_curr, A_prev, activation_func)
+
+            cache['A' + str(layer)] = A_curr
+            cache['Z' + str(layer)] = Z_curr
+
+            A_prev = A_curr
+            print('Switcheroo done')
+
         return A_curr, cache # Activation matrix for final layer is the output, and we also return the cache dictionary
 
     def _single_backprop(self,
@@ -198,15 +215,10 @@ class NeuralNetwork:
         elif activation_curr == 'sigmoid':
             dZ_curr = self._sigmoid_backprop(dA_curr, Z_curr)
 
-
-        dA_prev = np.array([np.matmul(dZ_curr[i, :], W_curr) for i in range(dZ_curr.shape[0])])
-        db_curr = np.sum(dZ_curr, axis = 0)
-        dZ_curr_dW_curr = np.tile(A_prev, (W_curr.shape[0], 1, 1))
-        dZ_curr = np.tile(dZ_curr, (W_curr.shape[1], 1, 1))
-        dZ_curr = np.moveaxis(dZ_curr, [2, 0], [0, 2])
-        dW_curr = np.sum(dZ_curr * dZ_curr_dW_curr, axis = 1)
-
-
+        dW_curr = (A_prev.T).dot(dA_curr * dZ_curr).T
+        db_curr = np.sum((dA_curr*dZ_curr), axis = 0).reshape(b_curr.shape)
+        dA_prev = (dA_curr * dZ_curr).dot(W_curr)
+        
 
         return dA_prev, dW_curr, db_curr
 
@@ -228,30 +240,49 @@ class NeuralNetwork:
                 Dictionary containing the gradient information from this pass of backprop.
         """
         grad_dict = {} # Initialize empty dictionary which will hold all gradient information for the backprop pass
-        dA_prev = self._binary_cross_entropy_backprop(y, y_hat) # Calculate derivative of loss function wrt final activation/results 
+        #dA_prev = self._binary_cross_entropy_backprop(y, y_hat) # Calculate derivative of loss function wrt final activation/results 
     
-        for prev_idx, layer in list(enumerate(self.arch))[::-1]: # Iterate backwards through the network
-            idx_curr = prev_idx + 1 # Adding one to our current index gets us one layer back through the network, which is the layer we wanna work with
-            string_idx_curr = str(idx_curr) # Do the string casting for the index again
-            string_idx_prev = str(prev_idx) # And for the idx, which really holds the index for the layer we started the iteration with
-            activation_curr = layer['activation'] # Get the activation function for the current layer
-            dA_curr = dA_prev # dA switcheroo between layers
-            # Get the necessary matrices to run the single layer backprop
-            W_curr = self._param_dict['W' + string_idx_curr]
-            b_curr = self._param_dict['b' + string_idx_curr]
-            Z_curr = cache["Z" + string_idx_curr]
-            A_prev = cache["A" + string_idx_prev]
+        # for prev_idx, layer in list(enumerate(self.arch))[::-1]: # Iterate backwards through the network
+        #     idx_curr = prev_idx + 1 # Adding one to our current index gets us one layer back through the network, which is the layer we wanna work with
+        #     string_idx_curr = str(idx_curr) # Do the string casting for the index again
+        #     string_idx_prev = str(prev_idx) # And for the idx, which really holds the index for the layer we started the iteration with
+        #     activation_curr = layer['activation'] # Get the activation function for the current layer
+        #     dA_curr = dA_prev # dA switcheroo between layers
+        #     # Get the necessary matrices to run the single layer backprop
+        #     W_curr = self._param_dict['W' + string_idx_curr]
+        #     b_curr = self._param_dict['b' + string_idx_curr]
+        #     Z_curr = cache["Z" + string_idx_curr]
+        #     A_prev = cache["A" + string_idx_curr]
 
-            # Get the activation function for the layer
-            activation_curr = layer['activation']
+        #     # Get the activation function for the layer
+        #     activation_curr = layer['activation']
 
-            # Now do backprop for a single layer
+        #     # Now do backprop for a single layer
+        #     dA_prev, dW_curr, db_curr = self._single_backprop(W_curr, b_curr, Z_curr, A_prev, dA_curr, activation_curr)
+
+        #     # Finally, store the gradient information for each pass of backprop in the gradients dictionary
+        #     grad_dict["dA" + string_idx_curr] = dA_prev
+        #     grad_dict["dW" + string_idx_curr] = dW_curr
+        #     grad_dict["db" + string_idx_curr] = db_curr
+        #     print(grad_dict)
+        if self._loss_func == 'mse':
+            dA_curr = self._mean_squared_error(y, y_hat)
+        else:
+            dA_curr = self._binary_cross_entropy(y, y_hat)
+
+        for layer in range(len(self.arch), 0, -1):
+            W_curr = self._param_dict['W' + str(layer)]
+            b_curr = self._param_dict['b' + str(layer)]
+            Z_curr = cache['Z' + str(layer)]
+            A_prev = cache['A' + str(layer - 1)]
+            activation_curr = self.arch[layer - 1]['activation']
             dA_prev, dW_curr, db_curr = self._single_backprop(W_curr, b_curr, Z_curr, A_prev, dA_curr, activation_curr)
 
-            # Finally, store the gradient information for each pass of backprop in the gradients dictionary
-            grad_dict["dA" + string_idx_curr] = dA_prev
-            grad_dict["dW" + string_idx_curr] = dW_curr
-            grad_dict["db" + string_idx_curr] = db_curr
+            grad_dict['dA_prev' + str(layer)] = dA_prev
+            grad_dict['dW_curr' + str(layer)] = dW_curr
+            grad_dict['db_curr' + str(layer)] = db_curr
+
+            dA_curr = dA_prev
              
         return grad_dict # Return the gradients dictionary
             
@@ -269,11 +300,9 @@ class NeuralNetwork:
         Returns:
             None
         """
-        for idx, layer in enumerate(self.arch):
-            idx += 1 # We started in the first layer (input layer), so add 1 to move to the next relevant layer
-            string_idx = str(idx) # And cast the index to string for easier accessing of the dict values
-            self._param_dict['W' + string_idx] = self._param_dict['W' + string_idx] - self._lr * grad_dict['dW' + string_idx] # Update the weights. We do this by multiplying the specified learning rate and gradient info (dW), and then subtract that from the current layer weights
-            self._param_dict['b' + string_idx] = self._param_dict['b' + string_idx] - self._lr * grad_dict['db' + string_idx] # Do exactly the same updating but for the biases
+        for layer in range(1, len(self.arch)):
+            self._param_dict['W' + str(layer)] = self._param_dict['W' + str(layer)] - self._lr * grad_dict['dW_curr' + str(layer)] # Update the weights. We do this by multiplying the specified learning rate and gradient info (dW), and then subtract that from the current layer weights
+            self._param_dict['b' + str(layer)] = self._param_dict['b' + str(layer)] - self._lr * grad_dict['db_curr' + str(layer)] # Do exactly the same updating but for the biases
             
     def fit(self,
             X_train: ArrayLike,
@@ -305,43 +334,52 @@ class NeuralNetwork:
         per_epoch_accuracy_train = [] # Also initialize empty lists for storing the accuracy of the model per epoch
         per_epoch_accuracy_val = []
 
-        self._convergence_thresh # Threshold to check for model convergence (i.e. has the model's loss over the validation set stopped decreasing)
-        # If th target vector is one-dimensional reshape it so that we can use it along with the predictions vector (this is due to a ValueError I was getting when calculating MSE)
-        if len(y_train.shape) == 1:
-            y_train = y_train.reshape((len(y_train), 1))
-        if len(y_val.shape) == 1:
-            y_val = y_val.reshape((len(y_val), 1))
+        # If the target vector is one-dimensional reshape it so that we can use it along with the predictions vector (this is due to a ValueError I was getting when calculating MSE)
+        # if len(y_train.shape) == 1:
+        #     y_train = y_train.reshape((len(y_train), 1))
+        # if len(y_val.shape) == 1:
+        #     y_val = y_val.reshape((len(y_val), 1))
         # Find the specified loss function, and pass it to a variable for easier loss calculation within the epoch. Otherwise would have to write the loops twice, once for each loss function
         if self._loss_func == 'bce':
             loss_func = self._binary_cross_entropy
         else:
             loss_func = self._mean_squared_error
 
-        val_loss_diff = 0 
-        for i in range(self._epochs): # This loop runs until we reach the user-specified number of epochs
-            # Training, forward pass
-            y_hat, cache = self.forward(X_train) 
-            per_epoch_loss_train.append(loss_func(y_train, y_hat)) # Calculate training loss via the user-specified loss function and store it in the list  
-            training_accuracy = np.sum(y_hat == y_train) / len(y_train) # Calculate the model's accuracy over training data
-            per_epoch_accuracy_train.append(training_accuracy) # Store it in the list
+        val_loss_diff = 1 
+        epoch = 1
+        while epoch < self._epochs: # This loop runs until we reach the user-specified number of epochs
+            print(epoch)
+            shuffled_data = np.concatenate([X_train, np.expand_dims(y_train, 1)], axis = 1)
+            np.random.shuffle(shuffled_data)
 
-            # Training, backprop
-            grad_dict = self.backprop(y_train, y_hat, cache) # Fill in that gradients dictionary
+            X_train = shuffled_data[:, :-1]
+            y_train = shuffled_data[:, -1].flatten()
 
-            # Validation, forward pass
-            y_hat, _ = self.forward(X_val) # Discard the cache because we're only using that for backprop during training
-            per_epoch_loss_val.append(loss_func(y_val, y_hat)) # Calculate loss over the validation set
-            validation_accuracy = np.sum(y_hat == y_val) / len(y_val) # Calculate the model's accuracy over the validation set
-            per_epoch_accuracy_val.append(validation_accuracy) # Store it in the list
-            self._update_params(grad_dict) # Update the model's parameters using the gradients dictionary we created during the training forward pass
+            n_batches = int(X_train.shape[0]/self._batch_size) + 1
 
-            # Convergence checking: essentially, when do we stop training the model?
-            if i >= 1: # Want to do this after calculating the loss for at least two epochs
-                val_loss_diff = (per_epoch_loss_val[i]) - (per_epoch_loss_val[i - 1]) # Difference in losses between two epochs
-            
-            if val_loss_diff < self._convergence_thresh: # If the difference between the losses of the last two epochs is below the established threshold, break the loop and stop training. The model has achieved C O N V E R G E N C E.
+            X_batch = np.array_split(X_train, n_batches)
+            y_batch = np.array_split(y_train, n_batches)
+
+            for X_train, y_train in zip(X_batch, y_batch):
+                print('Forward pass')
+                y_hat, cache = self.forward(X_train)
+                loss = loss_func(y_train, y_hat)
+                per_epoch_loss_train.append(loss)
+                print(per_epoch_loss_train)
+                print('Backprop pass')
+                grad_dict = self.backprop(y_train, y_hat, cache)
+                print('Updating parameters')
+                self._update_params(grad_dict)
+                print('Finished updating')
+                y_pred, cache = self.forward(X_val)
+                print('Validation forward complete')
+                print(y_pred)
+                val_loss = loss_func(y_val, y_pred)
+                print('Validation loss is: ' + val_loss)
+                per_epoch_loss_val.append(val_loss)
                 break
-        return per_epoch_loss_train, per_epoch_accuracy_train, per_epoch_loss_val, per_epoch_accuracy_val 
+            epoch += 1
+        return per_epoch_loss_train, per_epoch_loss_val 
 
     def predict(self, X: ArrayLike) -> ArrayLike:
         """
@@ -420,7 +458,7 @@ class NeuralNetwork:
         dZ = Z > 0 # Returns True if Z > 0, which is interpreted as 1; False if Z <= 0, which is interpreted as 0
         return dZ
 
-    def _binary_cross_entropy(self, y: ArrayLike, y_hat: ArrayLike) -> float:
+    def _binary_cross_entropy(self, y_hat: ArrayLike, y: ArrayLike) -> float:
         """
         Binary cross entropy loss function.
 
@@ -434,9 +472,11 @@ class NeuralNetwork:
             loss: float
                 Average loss over mini-batch.
         """
+        y_hat[y_hat == 0] = 0.0001
+        y_hat[y_hat == 1] = 0.9999
         return -np.mean(((1 - y) * np.log(1 - y_hat)) + (y * np.log(y_hat))) # Same implementation of BCE that I used for project 6 (if it ain't broke, don't fix it)
 
-    def _binary_cross_entropy_backprop(self, y: ArrayLike, y_hat: ArrayLike) -> ArrayLike:
+    def _binary_cross_entropy_backprop(self, y_hat: ArrayLike, y: ArrayLike) -> ArrayLike:
         """
         Binary cross entropy loss function derivative.
 
@@ -451,6 +491,8 @@ class NeuralNetwork:
                 partial derivative of loss with respect to A matrix.
         """
         m = y.shape[1]
+        y_hat[y_hat == 0] = 0.0001 # Avoid problems with taking the log of 0 and/or 1
+        y_hat[y_hat == 1] = 0.9999
         return (1/m) * (-(y/y_hat) + ((1-y) * np.log(1- y_hat)))
 
     def _mean_squared_error(self, y: ArrayLike, y_hat: ArrayLike) -> float:
