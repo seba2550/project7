@@ -259,8 +259,8 @@ class NeuralNetwork:
             None
         """
         for layer in range(1, len(self.arch)):
-            self._param_dict['W' + str(layer)] = self._param_dict['W' + str(layer)] - self._lr * grad_dict['dW_curr' + str(layer)] # Update the weights. We do this by multiplying the specified learning rate and gradient info (dW), and then subtract that from the current layer weights
-            self._param_dict['b' + str(layer)] = self._param_dict['b' + str(layer)] - self._lr * grad_dict['db_curr' + str(layer)] # Do exactly the same updating but for the biases
+            self._param_dict['W' + str(layer)] = self._param_dict['W' + str(layer)] + self._lr * grad_dict['dW_curr' + str(layer)] # Update the weights. We do this by multiplying the specified learning rate and gradient info (dW), and then subtract that from the current layer weights
+            self._param_dict['b' + str(layer)] = self._param_dict['b' + str(layer)] + self._lr * grad_dict['db_curr' + str(layer)] # Do exactly the same updating but for the biases
             
     def fit(self,
             X_train: ArrayLike,
