@@ -154,8 +154,8 @@ class NeuralNetwork:
             cache['Z' + str(layer)] = Z_curr
 
             A_prev = A_curr # Switch the A matrix
-
-        return A_curr, cache # Activation matrix for final layer is the output, and we also return the cache dictionary
+        output = A_prev
+        return output, cache # Activation matrix for final layer is the output, and we also return the cache dictionary
 
     def _single_backprop(self,
                          W_curr: ArrayLike,
@@ -289,9 +289,6 @@ class NeuralNetwork:
         per_epoch_loss_train = [] # Initialize empty lists for placing the losses per epoch (for training and validation, respectively)
         per_epoch_loss_val = []
 
-        per_epoch_accuracy_train = [] # Also initialize empty lists for storing the accuracy of the model per epoch
-        per_epoch_accuracy_val = []
-
         # If the target vector is one-dimensional reshape it so that we can use it along with the predictions vector (this is due to a ValueError I was getting when calculating MSE)
         if len(y_train.shape) == 1:
             y_train = y_train.reshape((len(y_train), 1))
@@ -325,15 +322,16 @@ class NeuralNetwork:
             for X_train, y_train in zip(X_batch, y_batch):
                 y_hat, cache = self.forward(X_train)
                 loss = loss_func(y_hat, y_train)
-                per_epoch_loss_train.append(loss)
                 grad_dict = self.backprop(y_train, y_hat, cache)
                 self._update_params(grad_dict)
                 y_pred, cache = self.forward(X_val)
                 val_loss = loss_func(y_pred, y_val)
-                per_epoch_loss_val.append(val_loss)
-            
+
+            per_epoch_loss_train.append(loss)
+            per_epoch_loss_val.append(val_loss)
+
             epoch += 1
-        return per_epoch_loss_train, per_epoch_loss_val 
+        return per_epoch_loss_train, per_epoch_loss_val
 
     def predict(self, X: ArrayLike) -> ArrayLike:
         """
@@ -428,8 +426,8 @@ class NeuralNetwork:
         """
         y_hat[y_hat == 0] = 0.0001
         y_hat[y_hat == 1] = 0.9999
-        return -np.mean(((1 - y) * np.log(1 - y_hat)) + (y * np.log(y_hat))) # Same implementation of BCE that I used for project 6 (if it ain't broke, don't fix it)
-
+        #return -np.mean(y * (np.log(y_hat)) - (1 - y) * np.log(1 - y_hat)) # Same implementation of BCE that I used for project 6 (if it ain't broke, don't fix it)
+        return -np.mean(y * np.log(y_hat) + (1 - y) * np.log(1 - y_hat))
     def _binary_cross_entropy_backprop(self, y_hat: ArrayLike, y: ArrayLike) -> ArrayLike:
         """
         Binary cross entropy loss function derivative.
@@ -444,10 +442,11 @@ class NeuralNetwork:
             dA: ArrayLike
                 partial derivative of loss with respect to A matrix.
         """
-        m = y.shape[1]
+        m = len(y)
         y_hat[y_hat == 0] = 0.0001 # Avoid problems with taking the log of 0 and/or 1
         y_hat[y_hat == 1] = 0.9999
-        return (1/m) * (-(y/y_hat) + ((1-y) * np.log(1- y_hat)))
+        #return (1/m) * (-(y/y_hat) + ((1-y) * np.log(1- y_hat)))
+        return (((1 - y) / (1 - y_hat)) - (y / y_hat)) / m
 
     def _mean_squared_error(self, y_hat: ArrayLike, y: ArrayLike) -> float:
         """
@@ -479,4 +478,4 @@ class NeuralNetwork:
             dA: ArrayLike
                 partial derivative of loss with respect to A matrix.
         """
-        return -2 * (y - y_hat)/ len(y)
+        return (2 * (y - y_hat))/ len(y)
